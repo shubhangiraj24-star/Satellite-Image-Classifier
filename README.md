@@ -1,21 +1,73 @@
-# Satellite Image Classifier 
+# 🛰 Satellite Image Classification AI
 
-# Overview
-This project uses AI to classify satellite images into:
-- City 
-- Forest 
+AI-powered satellite image classification system built using TensorFlow, EfficientNetB0, and Streamlit.
 
-# Technologies Used
+---
+
+## Live Demo
+https://your-streamlit-link.streamlit.app
+
+---
+
+##  Features
+- Satellite image classification
+- EfficientNetB0 deep learning model
+- Grad-CAM visualization
+- Streamlit web interface
+- Multi-class land detection
+
+---
+
+## Supported Classes
+- Sea/Lake
+- Forest
+- Highway
+- Industrial
+- River
+- Pasture
+- Crop Land
+- Residential Area
+
+---
+
+## 🛠 Tech Stack
 - Python
-- OpenCV
 - TensorFlow
+- Keras
+- OpenCV
+- Streamlit
+- NumPy
+- Matplotlib
 
-# How to Run
-1. Install dependencies
-2. Run main.py
-3. Add test.jpg
+---
 
-# Future Improvements
-- CNN model
-- Larger dataset
-- UI integration
+## 📷 Screenshots
+
+### Home Page
+![Home](images/app_ui.png)
+
+### Prediction Example
+![Prediction](images/prediction_demo.png)
+
+---
+
+## ⚙ Installation
+
+```bash
+git clone https://github.com/yourusername/satellite-image-classifier.git
+cd satellite-image-classifier
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+---
+
+## 📊Model Details
+- Model: EfficientNetB0
+- Transfer Learning Used
+- Explainable AI with Grad-CAM
+
+---
+
+##  Author
+Shubh Raj
