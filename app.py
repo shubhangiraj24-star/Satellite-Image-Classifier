@@ -1,128 +1,361 @@
+import streamlit as st
+import numpy as np
+import cv2
+import tensorflow as tf
+
+from tensorflow.keras.models import load_model
+from tensorflow.keras.applications.efficientnet import preprocess_input
+
+from PIL import Image
+
 # =========================
-# GRAD-CAM
+# PAGE CONFIG
 # =========================
-st.markdown("## Grad-CAM Visualization")
+st.set_page_config(
+    page_title="Satellite AI Classifier",
+    page_icon="🛰️",
+    layout="wide"
+)
 
-try:
+# =========================
+# LOAD MODEL
+# =========================
+@st.cache_resource
+def load_ai_model():
 
-    base_model = model.layers[0]
-
-    last_conv_layer = base_model.get_layer("top_conv")
-
-    feature_model = tf.keras.models.Model(
-        inputs=base_model.input,
-        outputs=last_conv_layer.output
+    model = load_model(
+        "best_satellite_model.keras",
+        compile=False
     )
 
-    with tf.GradientTape() as tape:
+    return model
 
-        conv_outputs = feature_model(img_array)
+model = load_ai_model()
 
-        tape.watch(conv_outputs)
+# =========================
+# CLASS LABELS
+# =========================
+classes = [
+    "Sea/Lake",
+    "Agriculture",
+    "Urban Area",
+    "Crop Land",
+    "Forest",
+    "Highway",
+    "Industrial Area",
+    "Pasture",
+    "River",
+    "Vegetation",
+    "Water Body"
+]
 
-        x = base_model.get_layer("top_bn")(conv_outputs)
+# =========================
+# CUSTOM CSS
+# =========================
+st.markdown("""
+<style>
 
-        x = base_model.get_layer("top_activation")(x)
+.main-title{
+    text-align:center;
+    font-size:42px;
+    font-weight:bold;
+    color:white;
+}
 
-        for layer in model.layers[1:]:
+.subtitle{
+    text-align:center;
+    color:#aaaaaa;
+    margin-bottom:25px;
+}
 
-            x = layer(x)
+.card{
+    background:#1e293b;
+    padding:25px;
+    border-radius:18px;
+    box-shadow:0px 0px 15px rgba(0,255,150,0.15);
+}
 
-        preds = x
+.prediction{
+    font-size:34px;
+    font-weight:bold;
+    color:#00ff99;
+}
 
-        class_channel = preds[:, pred_index]
+.confidence{
+    font-size:22px;
+    color:white;
+    margin-top:10px;
+}
 
-    grads = tape.gradient(
-        class_channel,
-        conv_outputs
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# SIDEBAR
+# =========================
+st.sidebar.title("🛰️ Satellite AI")
+
+st.sidebar.write(
+    "EfficientNetB0 + Grad-CAM"
+)
+
+st.sidebar.success("Model Loaded Successfully")
+
+st.sidebar.markdown("## Supported Classes")
+
+for c in classes:
+    st.sidebar.write(f"• {c}")
+
+# =========================
+# TITLE
+# =========================
+st.markdown(
+    '<div class="main-title">🛰️ Satellite Image Classification AI</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    '<div class="subtitle">Explainable AI using EfficientNetB0 + Grad-CAM</div>',
+    unsafe_allow_html=True
+)
+
+# =========================
+# FILE UPLOAD
+# =========================
+uploaded_file = st.file_uploader(
+    "Upload Satellite Image",
+    type=["jpg", "jpeg", "png"]
+)
+
+# =========================
+# MAIN
+# =========================
+if uploaded_file is not None:
+
+    # =========================
+    # LOAD IMAGE
+    # =========================
+    image = Image.open(uploaded_file).convert("RGB")
+
+    image_np = np.array(image)
+
+    original_img = image_np.copy()
+
+    # =========================
+    # DISPLAY IMAGE
+    # =========================
+    st.image(
+        image,
+        caption="Uploaded Image",
+        use_container_width=True
     )
 
-    # SAFETY CHECK
-    if grads is None:
+    # =========================
+    # PREPROCESS IMAGE
+    # =========================
+    img = cv2.resize(
+        image_np,
+        (224, 224),
+        interpolation=cv2.INTER_CUBIC
+    )
 
-        st.error("Gradients could not be computed.")
+    img = img.astype("float32")
 
-    else:
+    img = preprocess_input(img)
 
-        pooled_grads = tf.reduce_mean(
-            grads,
-            axis=(0, 1, 2)
+    img_array = np.expand_dims(img, axis=0)
+
+    # =========================
+    # PREDICTION
+    # =========================
+    with st.spinner("Analyzing Satellite Image..."):
+
+        predictions = model.predict(img_array)
+
+    pred_index = np.argmax(predictions[0])
+
+    predicted_class = classes[pred_index]
+
+    confidence = float(np.max(predictions[0]) * 100)
+
+    # =========================
+    # RESULT CARD
+    # =========================
+    st.markdown("## Prediction Result")
+
+    st.markdown(f"""
+    <div class="card">
+
+        <div class="prediction">
+            {predicted_class}
+        </div>
+
+        <div class="confidence">
+            Confidence: {confidence:.2f}%
+        </div>
+
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.progress(confidence / 100)
+
+    # =========================
+    # TOP 3 PREDICTIONS
+    # =========================
+    st.markdown("## Top Predictions")
+
+    top3_idx = predictions[0].argsort()[-3:][::-1]
+
+    for i in top3_idx:
+
+        st.write(f"### {classes[i]}")
+
+        st.progress(float(predictions[0][i]))
+
+        st.write(f"{predictions[0][i] * 100:.2f}%")
+
+    # =========================
+    # GRAD-CAM
+    # =========================
+    st.markdown("## Grad-CAM Visualization")
+
+    try:
+
+        base_model = model.layers[0]
+
+        last_conv_layer = base_model.get_layer("top_conv")
+
+        feature_model = tf.keras.models.Model(
+            inputs=base_model.input,
+            outputs=last_conv_layer.output
         )
 
-        conv_outputs = conv_outputs[0]
+        with tf.GradientTape() as tape:
 
-        heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
+            conv_outputs = feature_model(img_array)
 
-        heatmap = tf.squeeze(heatmap)
+            tape.watch(conv_outputs)
 
-        heatmap = np.maximum(heatmap, 0)
+            x = base_model.get_layer("top_bn")(conv_outputs)
 
-        # AVOID DIVISION BY ZERO
-        max_val = np.max(heatmap)
+            x = base_model.get_layer("top_activation")(x)
 
-        if max_val != 0:
+            for layer in model.layers[1:]:
 
-            heatmap /= max_val
+                x = layer(x)
+
+            preds = x
+
+            class_channel = preds[:, pred_index]
+
+        grads = tape.gradient(
+            class_channel,
+            conv_outputs
+        )
+
+        # SAFETY CHECK
+        if grads is None:
+
+            st.error("Gradients could not be computed.")
 
         else:
 
-            heatmap = np.zeros_like(heatmap)
-
-        # =========================
-        # RESIZE HEATMAP
-        # =========================
-        heatmap = cv2.resize(
-            heatmap.numpy(),
-            (
-                original_img.shape[1],
-                original_img.shape[0]
+            pooled_grads = tf.reduce_mean(
+                grads,
+                axis=(0, 1, 2)
             )
-        )
 
-        heatmap = np.uint8(255 * heatmap)
+            conv_outputs = conv_outputs[0]
 
-        heatmap = cv2.applyColorMap(
-            heatmap,
-            cv2.COLORMAP_JET
-        )
+            heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
 
-        heatmap = cv2.cvtColor(
-            heatmap,
-            cv2.COLOR_BGR2RGB
-        )
+            heatmap = tf.squeeze(heatmap)
 
-        # =========================
-        # OVERLAY
-        # =========================
-        superimposed_img = cv2.addWeighted(
-            original_img,
-            0.6,
-            heatmap,
-            0.4,
-            0
-        )
+            heatmap = np.maximum(heatmap, 0)
 
-        # =========================
-        # DISPLAY IMAGES
-        # =========================
-        col1, col2 = st.columns(2)
+            # AVOID DIVISION BY ZERO
+            max_val = np.max(heatmap)
 
-        with col1:
+            if max_val != 0:
 
-            st.image(
+                heatmap /= max_val
+
+            else:
+
+                heatmap = np.zeros_like(heatmap)
+
+            # =========================
+            # RESIZE HEATMAP
+            # =========================
+            heatmap = cv2.resize(
+                heatmap.numpy(),
+                (
+                    original_img.shape[1],
+                    original_img.shape[0]
+                )
+            )
+
+            heatmap = np.uint8(255 * heatmap)
+
+            heatmap = cv2.applyColorMap(
                 heatmap,
-                caption="Grad-CAM Heatmap",
-                use_container_width=True
+                cv2.COLORMAP_JET
             )
 
-        with col2:
-
-            st.image(
-                superimposed_img,
-                caption="AI Attention Map",
-                use_container_width=True
+            heatmap = cv2.cvtColor(
+                heatmap,
+                cv2.COLOR_BGR2RGB
             )
 
-except Exception as e:
+            # =========================
+            # OVERLAY
+            # =========================
+            superimposed_img = cv2.addWeighted(
+                original_img,
+                0.6,
+                heatmap,
+                0.4,
+                0
+            )
 
-    st.error(f"Grad-CAM Error: {e}")
+            # =========================
+            # DISPLAY IMAGES
+            # =========================
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                st.image(
+                    heatmap,
+                    caption="Grad-CAM Heatmap",
+                    use_container_width=True
+                )
+
+            with col2:
+
+                st.image(
+                    superimposed_img,
+                    caption="AI Attention Map",
+                    use_container_width=True
+                )
+
+    except Exception as e:
+
+        st.error(f"Grad-CAM Error: {e}")
+
+    # =========================
+    # HOW IT WORKS
+    # =========================
+    st.markdown("## How It Works")
+
+    st.markdown("""
+    1. Upload satellite image  
+    2. EfficientNetB0 extracts deep features  
+    3. AI predicts land category  
+    4. Grad-CAM highlights important regions  
+    5. Confidence scores are displayed  
+    """)
+
+else:
+
+    st.info("Upload a satellite image to begin.")
