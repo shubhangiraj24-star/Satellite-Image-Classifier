@@ -132,229 +132,230 @@ uploaded_file = st.file_uploader(
 # =========================
 if uploaded_file is not None:
 
-    # =========================
-    # LOAD IMAGE
-    # =========================
-    image = Image.open(uploaded_file).convert("RGB")
-
-    image_np = np.array(image)
-
-    original_img = image_np.copy()
-
-    # =========================
-    # DISPLAY IMAGE
-    # =========================
-    st.image(
-        image,
-        caption="Uploaded Image",
-        use_container_width=True
-    )
-
-    # =========================
-    # PREPROCESS IMAGE
-    # =========================
-    img = cv2.resize(
-        image_np,
-        (224, 224),
-        interpolation=cv2.INTER_CUBIC
-    )
-
-    img = img.astype("float32")
-
-    img = preprocess_input(img)
-
-    img_array = np.expand_dims(img, axis=0)
-
-    # =========================
-    # PREDICTION
-    # =========================
-    with st.spinner("Analyzing Satellite Image..."):
-
-        predictions = model.predict(img_array)
-
-    pred_index = np.argmax(predictions[0])
-
-    predicted_class = classes[pred_index]
-
-    confidence = float(np.max(predictions[0]) * 100)
-
-    # =========================
-    # RESULT CARD
-    # =========================
-    st.markdown("## Prediction Result")
-
-    st.markdown(f"""
-    <div class="card">
-
-        <div class="prediction">
-            {predicted_class}
-        </div>
-
-        <div class="confidence">
-            Confidence: {confidence:.2f}%
-        </div>
-
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.progress(confidence / 100)
-
-    # =========================
-    # TOP 3 PREDICTIONS
-    # =========================
-    st.markdown("## Top Predictions")
-
-    top3_idx = predictions[0].argsort()[-3:][::-1]
-
-    for i in top3_idx:
-
-        st.write(f"### {classes[i]}")
-
-        st.progress(float(predictions[0][i]))
-
-        st.write(f"{predictions[0][i] * 100:.2f}%")
-
-    # =========================
-    # GRAD-CAM
-    # =========================
-    st.markdown("## Grad-CAM Visualization")
-
     try:
 
-        base_model = model.layers[0]
+        # =========================
+        # LOAD IMAGE
+        # =========================
+        image = Image.open(uploaded_file).convert("RGB")
 
-        last_conv_layer = base_model.get_layer("top_conv")
+        image_np = np.array(image)
 
-        feature_model = tf.keras.models.Model(
-            inputs=base_model.input,
-            outputs=last_conv_layer.output
+        original_img = image_np.copy()
+
+        # =========================
+        # DISPLAY IMAGE
+        # =========================
+        st.image(
+            np.array(image),
+            caption="Uploaded Image"
         )
 
-        with tf.GradientTape() as tape:
-
-            conv_outputs = feature_model(img_array)
-
-            tape.watch(conv_outputs)
-
-            x = base_model.get_layer("top_bn")(conv_outputs)
-
-            x = base_model.get_layer("top_activation")(x)
-
-            for layer in model.layers[1:]:
-
-                x = layer(x)
-
-            preds = x
-
-            class_channel = preds[:, pred_index]
-
-        grads = tape.gradient(
-            class_channel,
-            conv_outputs
+        # =========================
+        # PREPROCESS IMAGE
+        # =========================
+        img = cv2.resize(
+            image_np,
+            (224, 224),
+            interpolation=cv2.INTER_CUBIC
         )
 
-        # SAFETY CHECK
-        if grads is None:
+        img = img.astype("float32")
 
-            st.error("Gradients could not be computed.")
+        img = preprocess_input(img)
 
-        else:
+        img_array = np.expand_dims(img, axis=0)
 
-            pooled_grads = tf.reduce_mean(
-                grads,
-                axis=(0, 1, 2)
+        # =========================
+        # PREDICTION
+        # =========================
+        with st.spinner("Analyzing Satellite Image..."):
+
+            predictions = model.predict(img_array)
+
+        pred_index = np.argmax(predictions[0])
+
+        predicted_class = classes[pred_index]
+
+        confidence = float(np.max(predictions[0]) * 100)
+
+        # =========================
+        # RESULT CARD
+        # =========================
+        st.markdown("## Prediction Result")
+
+        st.markdown(f"""
+        <div class="card">
+
+            <div class="prediction">
+                {predicted_class}
+            </div>
+
+            <div class="confidence">
+                Confidence: {confidence:.2f}%
+            </div>
+
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.progress(confidence / 100)
+
+        # =========================
+        # TOP 3 PREDICTIONS
+        # =========================
+        st.markdown("## Top Predictions")
+
+        top3_idx = predictions[0].argsort()[-3:][::-1]
+
+        for i in top3_idx:
+
+            st.write(f"### {classes[i]}")
+
+            st.progress(float(predictions[0][i]))
+
+            st.write(f"{predictions[0][i] * 100:.2f}%")
+
+        # =========================
+        # GRAD-CAM
+        # =========================
+        st.markdown("## Grad-CAM Visualization")
+
+        try:
+
+            base_model = model.layers[0]
+
+            last_conv_layer = base_model.get_layer("top_conv")
+
+            feature_model = tf.keras.models.Model(
+                inputs=base_model.input,
+                outputs=last_conv_layer.output
             )
 
-            conv_outputs = conv_outputs[0]
+            with tf.GradientTape() as tape:
 
-            heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
+                conv_outputs = feature_model(img_array)
 
-            heatmap = tf.squeeze(heatmap)
+                tape.watch(conv_outputs)
 
-            heatmap = np.maximum(heatmap, 0)
+                x = base_model.get_layer("top_bn")(conv_outputs)
 
-            # AVOID DIVISION BY ZERO
-            max_val = np.max(heatmap)
+                x = base_model.get_layer("top_activation")(x)
 
-            if max_val != 0:
+                for layer in model.layers[1:]:
 
-                heatmap /= max_val
+                    x = layer(x)
+
+                preds = x
+
+                class_channel = preds[:, pred_index]
+
+            grads = tape.gradient(
+                class_channel,
+                conv_outputs
+            )
+
+            if grads is None:
+
+                st.error("Gradients could not be computed.")
 
             else:
 
-                heatmap = np.zeros_like(heatmap)
-
-            # =========================
-            # RESIZE HEATMAP
-            # =========================
-            heatmap = cv2.resize(
-                heatmap.numpy(),
-                (
-                    original_img.shape[1],
-                    original_img.shape[0]
+                pooled_grads = tf.reduce_mean(
+                    grads,
+                    axis=(0, 1, 2)
                 )
-            )
 
-            heatmap = np.uint8(255 * heatmap)
+                conv_outputs = conv_outputs[0]
 
-            heatmap = cv2.applyColorMap(
-                heatmap,
-                cv2.COLORMAP_JET
-            )
+                heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
 
-            heatmap = cv2.cvtColor(
-                heatmap,
-                cv2.COLOR_BGR2RGB
-            )
+                heatmap = tf.squeeze(heatmap)
 
-            # =========================
-            # OVERLAY
-            # =========================
-            superimposed_img = cv2.addWeighted(
-                original_img,
-                0.6,
-                heatmap,
-                0.4,
-                0
-            )
+                heatmap = np.maximum(heatmap, 0)
 
-            # =========================
-            # DISPLAY IMAGES
-            # =========================
-            col1, col2 = st.columns(2)
+                max_val = np.max(heatmap)
 
-            with col1:
+                if max_val != 0:
 
-                st.image(
+                    heatmap /= max_val
+
+                else:
+
+                    heatmap = np.zeros_like(heatmap)
+
+                # =========================
+                # RESIZE HEATMAP
+                # =========================
+                heatmap = cv2.resize(
+                    heatmap.numpy(),
+                    (
+                        original_img.shape[1],
+                        original_img.shape[0]
+                    )
+                )
+
+                heatmap = np.uint8(255 * heatmap)
+
+                heatmap = cv2.applyColorMap(
                     heatmap,
-                    caption="Grad-CAM Heatmap",
-                    use_container_width=True
+                    cv2.COLORMAP_JET
                 )
 
-            with col2:
-
-                st.image(
-                    superimposed_img,
-                    caption="AI Attention Map",
-                    use_container_width=True
+                heatmap = cv2.cvtColor(
+                    heatmap,
+                    cv2.COLOR_BGR2RGB
                 )
+
+                # =========================
+                # OVERLAY
+                # =========================
+                superimposed_img = cv2.addWeighted(
+                    original_img,
+                    0.6,
+                    heatmap,
+                    0.4,
+                    0
+                )
+
+                # =========================
+                # DISPLAY IMAGES
+                # =========================
+                col1, col2 = st.columns(2)
+
+                with col1:
+
+                    st.image(
+                        np.array(heatmap),
+                        caption="Grad-CAM Heatmap"
+                    )
+
+                with col2:
+
+                    st.image(
+                        np.array(superimposed_img),
+                        caption="AI Attention Map"
+                    )
+
+        except Exception as e:
+
+            st.error(f"Grad-CAM Error: {e}")
+
+        # =========================
+        # HOW IT WORKS
+        # =========================
+        st.markdown("## How It Works")
+
+        st.markdown("""
+        1. Upload satellite image  
+        2. EfficientNetB0 extracts deep features  
+        3. AI predicts land category  
+        4. Grad-CAM highlights important regions  
+        5. Confidence scores are displayed  
+        """)
 
     except Exception as e:
 
-        st.error(f"Grad-CAM Error: {e}")
-
-    # =========================
-    # HOW IT WORKS
-    # =========================
-    st.markdown("## How It Works")
-
-    st.markdown("""
-    1. Upload satellite image  
-    2. EfficientNetB0 extracts deep features  
-    3. AI predicts land category  
-    4. Grad-CAM highlights important regions  
-    5. Confidence scores are displayed  
-    """)
+        st.error(f"Application Error: {e}")
 
 else:
 
