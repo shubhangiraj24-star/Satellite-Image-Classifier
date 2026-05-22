@@ -287,7 +287,7 @@ if uploaded_file is not None:
                 # RESIZE HEATMAP
                 # =========================
                 heatmap = cv2.resize(
-                    heatmap.numpy(),
+                heatmap,
                     (
                         original_img.shape[1],
                         original_img.shape[0]
